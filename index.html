@@ -22,8 +22,9 @@ h1{margin:0;font-size:3.6rem;letter-spacing:.04em;flex:1;white-space:nowrap}
 .total b{font-family:var(--f-num);font-weight:500;color:var(--data);font-size:3.8rem;font-variant-numeric:tabular-nums}
 .step{font-family:var(--f-num);font-size:2.6rem;color:var(--muted);white-space:nowrap}.step b{color:var(--accent);font-size:3.6rem}
 .demo{font-size:1.9rem;color:var(--warn);border:.15rem solid var(--warn);border-radius:999px;padding:.3rem 1.6rem;white-space:nowrap}
-.stage{position:relative;flex:1;min-height:0;aspect-ratio:16/9;max-width:100%;border-radius:1.4rem;overflow:hidden;border:.15rem solid var(--line)}
-.stage img{width:100%;height:100%;display:block}
+.stage{position:relative;flex:1;min-height:0;width:100%;background:#d9c9c4 center/100% 100% no-repeat;border-radius:1.4rem;overflow:hidden;border:.15rem solid var(--line)}
+.stage img{position:absolute;top:0;left:50%;height:100%;width:auto;transform:translateX(-50%);display:block;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent);mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent)}
 .pin{position:absolute;width:3rem;height:3rem;margin:-1.5rem 0 0 -1.5rem;border-radius:50%;background:var(--on);z-index:2;
   box-shadow:0 0 0 1.1rem rgba(88,196,134,.35),0 0 0 2.4rem rgba(88,196,134,.14);transition:left .7s,top .7s;animation:pulse 1.6s infinite}
 .pin.ring{width:4.4rem;height:4.4rem;margin:-2.2rem 0 0 -2.2rem;background:transparent;border:.45rem solid var(--on);box-sizing:border-box;animation:none}
@@ -320,10 +321,12 @@ function updateRank(){
     r.classList.toggle("cur", t.i === cur);
   });
 }
+/* 底圖保持 16:9 置中，左右用同一張圖拉伸補滿；回傳底圖的左邊位置與寬度 */
+function ib(W,H){ const iw = Math.min(W, H*16/9); return {ox:(W-iw)/2, iw}; }
 function place(){
   const st = $("stage"), W = st.clientWidth, H = st.clientHeight; if(!W) return;
   // 底圖 16:9：原 4:3 位置換算 → 加上左右延伸的背景（每層各自的 px、pw）
-  const f = FLOORS[FL], a = L[cur], x = W*(f.px + a.x/100*f.pw), y = H*a.y/100, pin = $("pin"), win = $("win"), lead = $("lead");
+  const f = FLOORS[FL], a = L[cur], b = ib(W,H), x = b.ox + b.iw*(f.px + a.x/100*f.pw), y = H*a.y/100, pin = $("pin"), win = $("win"), lead = $("lead");
   pin.style.left = x+"px"; pin.style.top = y+"px"; pin.classList.toggle("ring", !!a.keys);
   win.innerHTML = card();
   if(getComputedStyle(win).position !== "absolute") return;
@@ -355,7 +358,7 @@ function drawLead(x, y, px, py, ww, wh){
     w.style.left = px+"px"; w.style.top = py+"px";
     const f = FLOORS[FL], a = L[cur];
     a.pos = {x: px/W, y: py/H};
-    drawLead(W*(f.px + a.x/100*f.pw), H*a.y/100, px, py, ww, wh);
+    const b = ib(W,H); drawLead(b.ox + b.iw*(f.px + a.x/100*f.pw), H*a.y/100, px, py, ww, wh);
   });
   const end = () => { if(d){ win().classList.remove("drag"); d = null; } };
   document.addEventListener("pointerup", end); document.addEventListener("pointercancel", end);
@@ -369,7 +372,7 @@ function buildDots(){
 function placeDots(){
   const st = $("stage"), W = st.clientWidth, H = st.clientHeight, f = FLOORS[FL];
   const els = [...document.querySelectorAll("#dots .dot")];
-  const pts = els.map(el => { const a = L[+el.dataset.i]; return {x: W*(f.px + a.x/100*f.pw), y: H*a.y/100}; });
+  const b = ib(W,H), pts = els.map(el => { const a = L[+el.dataset.i]; return {x: b.ox + b.iw*(f.px + a.x/100*f.pw), y: H*a.y/100}; });
   // 太近的點位互相推開，編號不重疊
   const D = (els[0] ? els[0].offsetWidth : 30) * 1.15;
   for(let it=0; it<12; it++) for(let i=0;i<pts.length;i++) for(let j=i+1;j<pts.length;j++){
@@ -454,7 +457,7 @@ function enter(i){
   const f = FLOORS[i];
   if(!f.built){ toast(`${f.id} 尚未建置`); return; }
   FL = i; L = f.devices;
-  $("base").src = f.base; $("base").alt = `嵐庭旭 ${f.id} 3D 鳥瞰圖`;
+  $("base").src = f.base; $("stage").style.backgroundImage = `url(${f.base})`; $("base").alt = `嵐庭旭 ${f.id} 3D 鳥瞰圖`;
   $("ftitle").textContent = `嵐庭旭 ${f.id}・家電能源狀態`; $("tlab").textContent = f.id;
   $("total").textContent = Math.round(L.reduce((s,a)=>s+watt(a),0)).toLocaleString("en-US");
   view = "floor"; $("homeView").hidden = true; $("tv").hidden = false; buildRank(); buildDots(); show(0);
