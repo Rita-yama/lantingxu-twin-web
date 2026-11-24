@@ -531,4 +531,6 @@ idleT = setTimeout(startAuto, IDLE_MS);
 setInterval(tick, 1500); setInterval(clock, 10000);
 </script>
 
+<div id="resprobe" style="position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:99;background:#000;color:#ff0;font:bold 48px monospace;padding:24px 40px;border:6px solid #ff0;text-align:center"></div>
+<script>(function(){const f=()=>{document.getElementById("resprobe").innerHTML="解析度檢查<br>視窗 "+innerWidth+" × "+innerHeight+"<br>像素比 "+devicePixelRatio+"<br>實際 "+Math.round(innerWidth*devicePixelRatio)+" × "+Math.round(innerHeight*devicePixelRatio)+"<br>螢幕 "+screen.width+" × "+screen.height;};f();addEventListener("resize",f);})();</script>
 </body></html>
