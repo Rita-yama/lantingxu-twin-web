@@ -55,7 +55,7 @@ h1{margin:0;font-size:3.6rem;letter-spacing:.04em;flex:1;white-space:nowrap}
 .held .step::after{content:"  暫停";color:var(--warn);font-size:2.2rem}
 @media (max-aspect-ratio:4/3){
   html,body{overflow:auto;height:auto}.tv{height:auto}header{flex-wrap:wrap;height:auto}h1{font-size:22px;white-space:normal}
-  .stage{flex:none;width:100%}.win{position:static;width:auto;margin-top:12px}.lead{display:none}
+  .stage{flex:none;width:100%}.win{position:static;width:auto;margin-top:12px;scale:none}.lead{display:none}.rank{scale:none}
 }
 
 html{font-size:min(1vh,calc(100vw / 177.78))}
@@ -112,6 +112,8 @@ html{font-size:min(1vh,calc(100vw / 177.78))}
 .live{display:flex;align-items:center;gap:.8rem;font-size:1.6rem;color:var(--on);margin:-.4rem 0 1rem;letter-spacing:.06em}
 .live i{width:1.2rem;height:1.2rem;border-radius:50%;background:var(--on);box-shadow:0 0 .8rem var(--on);animation:blink 1s steps(2,jump-none) infinite}
 @keyframes blink{50%{opacity:.2}}
+/* v28：能源框與耗電排行放大 1.25 倍（JS 的 WS 要一致） */
+.win{transform-origin:0 0;scale:1.25}.rank{transform-origin:100% 100%;scale:1.25}
 .live .ts{margin-left:auto;color:var(--muted);font-family:var(--f-num);letter-spacing:0}
 .win .data{gap:.6rem}.win .data b{font-size:2.45rem;letter-spacing:-.02em}
 .rank{position:absolute;right:1.5rem;bottom:1.5rem;width:36rem;z-index:3;background:rgba(36,31,26,.95);border:.2rem solid var(--line);
@@ -149,7 +151,7 @@ html{font-size:min(1vh,calc(100vw / 177.78))}
 @keyframes pwglow{50%{box-shadow:0 0 1.6rem var(--on)}}
 @media (prefers-reduced-motion:reduce){.lead,.lead::after,.win,.live i,.pw,.data b.flash{animation:none}}
 .win{cursor:grab;touch-action:none;user-select:none}.win.drag{cursor:grabbing;transition:none}
-.dot{position:absolute;width:3.4rem;height:3.4rem;margin:-1.7rem 0 0 -1.7rem;border-radius:50%;z-index:2;cursor:pointer;
+.dot{position:absolute;width:3.4rem;height:3.4rem;margin:-1.7rem 0 0 -1.7rem;border-radius:50%;z-index:4;cursor:pointer;
   background:rgba(27,23,19,.82);border:.25rem solid var(--accent);color:var(--ink);display:grid;place-items:center;
   font:700 1.6rem var(--f-num);box-sizing:border-box;transition:transform .2s}
 .dot:hover{transform:scale(1.25)}
@@ -322,6 +324,8 @@ function updateRank(){
   });
 }
 /* 底圖保持 16:9 置中，左右用同一張圖拉伸補滿；回傳底圖的左邊位置與寬度 */
+const WS = 1.25;   // 能源框放大倍數，與 CSS .win scale 一致
+const wsz = w => getComputedStyle(w).scale === "none" ? 1 : WS;
 function ib(W,H){ const iw = Math.min(W, H*16/9); return {ox:(W-iw)/2, iw}; }
 function place(){
   const st = $("stage"), W = st.clientWidth, H = st.clientHeight; if(!W) return;
@@ -330,7 +334,7 @@ function place(){
   pin.style.left = x+"px"; pin.style.top = y+"px"; pin.classList.toggle("ring", !!a.keys);
   win.innerHTML = card();
   if(getComputedStyle(win).position !== "absolute") return;
-  const ww = win.offsetWidth, wh = win.offsetHeight, gap = W*0.07;
+  const ws = wsz(win), ww = win.offsetWidth*ws, wh = win.offsetHeight*ws, gap = W*0.07;
   let px = H*0.015, py = H*0.015;                          // 統一放左上角（建築外的背景區）
   px = Math.max(H*0.015, Math.min(W-ww-H*0.015, px));
   py = Math.max(H*0.015, Math.min(H-wh-H*0.015, py));
@@ -353,7 +357,7 @@ function drawLead(x, y, px, py, ww, wh){
   });
   document.addEventListener("pointermove", e => {
     if(!d) return;
-    const w = win(), st = $("stage"), W = st.clientWidth, H = st.clientHeight, ww = w.offsetWidth, wh = w.offsetHeight;
+    const w = win(), st = $("stage"), W = st.clientWidth, H = st.clientHeight, ws = wsz(w), ww = w.offsetWidth*ws, wh = w.offsetHeight*ws;
     const px = Math.max(0, Math.min(W-ww, e.clientX - d.dx)), py = Math.max(0, Math.min(H-wh, e.clientY - d.dy));
     w.style.left = px+"px"; w.style.top = py+"px";
     const f = FLOORS[FL], a = L[cur];
