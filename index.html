@@ -22,6 +22,8 @@ h1{margin:0;font-size:3.6rem;letter-spacing:.04em;flex:1;white-space:nowrap}
 .total b{font-family:var(--f-num);font-weight:500;color:var(--data);font-size:3.8rem;font-variant-numeric:tabular-nums}
 .step{font-family:var(--f-num);font-size:2.6rem;color:var(--muted);white-space:nowrap}.step b{color:var(--accent);font-size:3.6rem}
 .demo{font-size:1.9rem;color:var(--warn);border:.15rem solid var(--warn);border-radius:999px;padding:.3rem 1.6rem;white-space:nowrap}
+.demo.ok{color:var(--on);border-color:var(--on)}
+.live.off{color:var(--muted)}.live.off i{background:var(--muted);box-shadow:none;animation:none}
 .stage{position:relative;flex:1;min-height:0;width:100%;background:#d9c9c4 center/100% 100% no-repeat;border-radius:1.4rem;overflow:hidden;border:.15rem solid var(--line)}
 .stage img{position:absolute;top:0;left:50%;height:100%;width:auto;transform:translateX(-50%);display:block;
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent);mask-image:linear-gradient(90deg,transparent,#000 3%,#000 97%,transparent)}
@@ -170,7 +172,7 @@ html{font-size:min(1vh,calc(100vw / 177.78))}
     <span class="mode" id="hmode"></span>
     <button class="pausebtn" id="hpause"></button>
     <span class="clock" id="clock"></span>
-    <span class="demo">示範數據</span>
+    <span class="demo">連線中…</span>
   </header>
   <section class="hmain" aria-label="三層樓立體圖">
     <nav class="menu" id="menu" aria-label="選擇樓層"></nav>
@@ -195,7 +197,7 @@ html{font-size:min(1vh,calc(100vw / 177.78))}
     <button class="pausebtn" id="fpause"></button>
     <span class="step" id="step"></span>
     <span class="total"><span id="tlab">2F</span> 即時功率 <b id="total">0</b> 瓦</span>
-    <span class="demo">示範數據</span>
+    <span class="demo">連線中…</span>
   </header>
   <section class="stage" id="stage" aria-label="樓層鳥瞰圖">
     <img id="base" src="twin2f17.jpg" alt="嵐庭旭 2F 3D 鳥瞰圖">
@@ -259,6 +261,41 @@ const fw = n => n < 100 ? n.toFixed(2) : Math.round(n).toLocaleString("en-US");
 const watt = a => a.keys ? a.keys.reduce((s,k)=>s+(k.on?k.w:0),0) : a.w;
 const kwh  = a => a.keys ? a.keys.reduce((s,k)=>s+k.kwh,0) : a.kwh;
 const $ = id => document.getElementById(id);
+/* ===== v31 真實數據（YamaPAD API，2026-11-24）=====
+   每 5 秒批次讀 /Other/getDevicesInfo；點位對應見 Pictures\嵐庭\API資料\點位對應_草稿_v1.md。
+   沒有對應的點位顯示「未連線」，不列入總功率與排行。 */
+const API = "https://vx1gozd497.execute-api.ap-northeast-1.amazonaws.com/dev";
+const POLL_MS = 5000;
+const DEV = {
+  "2F": {9:"P_ACF458", 10:"P_97F014", 30:"P_977A98", 22:"P_AB7504", 11:"P_981CFC", 31:"P_977C94", 14:"P_B8695C", 13:"P_B99AFC", 26:"P_9A2490", 24:"P_B83248", "電":"P_983714"},
+  "1F": {4:"P_AB82A0", 5:"P_9ABDD0", 25:"P_97FF34", 6:"P_AB8200", 7:"P_AB85E8", 1:"P_982F78", 3:"P_9844D4", 2:"P_976F7C"},
+  "5F": {20:"P_BAEE48", 19:"P_ACFC94", 18:"P_AA2B98"}
+};
+let apiOK = null;   // null 還沒讀到、true 正常、false 連線中斷
+[["2F",LIST],["1F",LIST1F],["5F",LIST5F]].forEach(([f,arr]) => arr.forEach(a => {
+  const id = DEV[f][a.no]; a.dev = id ? id.replace("P_","yamasun-smartPlug-1051DB") : null;
+  a.w = a.base = 0; a.kwh = 0; a.hist = a.hist.map(()=>0);   // 先歸零，等 API 回來
+}));
+async function poll(){
+  const all = [...LIST, ...LIST1F, ...LIST5F].filter(a => a.dev);
+  try{
+    const r = await fetch(API + "/Other/getDevicesInfo?deviceIDs=" + encodeURIComponent(JSON.stringify(all.map(a=>a.dev))), {cache:"no-store"});
+    const j = await r.json(); if(!j || !Array.isArray(j.data)) throw 0;
+    const by = {}; j.data.forEach(d => by[d.deviceID] = d);
+    all.forEach(a => { const d = by[a.dev]; if(!d) { a.online = false; return; }
+      a.online = d.onlineStatus !== false; a.on = !!d.deviceState;
+      a.w = +d.power || 0; a.v = +d.voltage || a.v; a.amp = +d.current || 0; a.kwh = +d.totalPower || 0; });
+    apiOK = true;
+  }catch(e){ apiOK = false; }
+  drawBadge();
+}
+function drawBadge(){
+  document.querySelectorAll(".demo").forEach(b => {
+    b.textContent = apiOK === false ? "連線中斷" : apiOK ? "即時數據" : "連線中…";
+    b.classList.toggle("ok", apiOK === true);
+  });
+}
+
 
 /* ===== 樓層（上到下）。之後 1F、5F 有圖：built:true、img 換成該層摳圖、devices 換成該層清單。 ===== */
 const FLOORS = [
@@ -274,10 +311,11 @@ let auto = false, held = false, autoT = null, idleT = null, autoFloor = -1;
 /* ---------- 2F 樓層頁（同第 11 版） ---------- */
 function card(){
   const a = L[cur], w = watt(a);
-  return `<div class="live"><i></i>即時連線中・每 1.5 秒更新<span class="ts" id="ts">${now()}</span></div>
-  <div class="top"><span class="no">${a.no ?? cur+1}</span><div class="nm"><b>${a.name}</b><span>${a.loc}</span></div><div class="pw">${POWER}</div></div>
-  <div class="data"><div><i>電流</i><b id="dA">${f2(w/a.v)}</b><i>安培</i></div><div><i>電壓</i><b id="dV">${f2(a.v)}</b><i>伏特</i></div>
-   <div><i>功率</i><b id="dW">${fw(w)}</b><i>瓦</i></div><div><i>累積度數</i><b id="dK">${f2(kwh(a))}</b><i>度</i></div></div>
+  const st = !a.dev ? "未連線（尚未對應設備）" : apiOK === false ? "連線中斷・顯示最後數值" : a.online === false ? "裝置離線" : "即時連線中・每 5 秒更新";
+  return `<div class="live${a.dev && a.online !== false && apiOK !== false ? "" : " off"}"><i></i>${st}<span class="ts" id="ts">${now()}</span></div>
+  <div class="top"><span class="no">${a.no ?? cur+1}</span><div class="nm"><b>${a.name}</b><span>${a.loc}</span></div><div class="pw"${a.dev && a.on !== false && a.online !== false ? "" : ' style="background:#5a524a"'}>${POWER}</div></div>
+  <div class="data"><div><i>電流</i><b id="dA">${!a.dev ? "—" : f2(a.amp ?? w/a.v)}</b><i>安培</i></div><div><i>電壓</i><b id="dV">${!a.dev ? "—" : f2(a.v)}</b><i>伏特</i></div>
+   <div><i>功率</i><b id="dW">${!a.dev ? "—" : fw(w)}</b><i>瓦</i></div><div><i>累積度數</i><b id="dK">${!a.dev ? "—" : f2(kwh(a))}</b><i>度</i></div></div>
   <svg class="spark" id="spark" viewBox="0 0 200 40" preserveAspectRatio="none">${spark(a)}</svg>
   ${a.keys ? `<div class="keys">${a.keys.map(k=>`<div class="key"><span class="kk">${k.k}</span><span class="ks ${k.on?"on":"off"}">${k.on?"開":"關"}</span><span class="kv">${Math.round(k.on?k.w:0)} 瓦</span><span class="kv">${f2(k.kwh)} 度</span></div>`).join("")}</div>` : ""}
   ${a.empty ? `<div class="empty">已通電，尚未決定接什麼家電</div>` : ""}
@@ -298,7 +336,8 @@ function spark(a){
 function updateWin(){
   const a = L[cur], w = watt(a), set = (id, t) => { const e = $(id); if(!e) return; if(e.textContent !== t){ e.textContent = t; e.classList.remove("flash"); void e.offsetWidth; e.classList.add("flash"); } };
   if(!$("dW")){ $("win").innerHTML = card(); return; }
-  set("dA", f2(w/a.v)); set("dV", f2(a.v)); set("dW", fw(w)); set("dK", f2(kwh(a)));
+  if(!a.dev || a._st !== apiOK + "" + a.online + a.on){ a._st = apiOK + "" + a.online + a.on; $("win").innerHTML = card(); return; }
+  set("dA", f2(a.amp ?? w/a.v)); set("dV", f2(a.v)); set("dW", fw(w)); set("dK", f2(kwh(a)));
   $("spark").innerHTML = spark(a); $("ts").textContent = now();
   if(a.keys) $("win").innerHTML = card();
 }
@@ -311,7 +350,7 @@ function buildRank(){
 function updateRank(){
   if(!$("rr0")) return;
   const tot = L.reduce((s,a)=>s+watt(a),0) || 1;
-  const top = L.map((a,i)=>({a,i,w:watt(a)})).sort((p,q)=>q.w-p.w).slice(0,5), max = (top[0] && top[0].w) || 1;
+  const top = L.map((a,i)=>({a,i,w:watt(a)})).filter(t=>t.a.dev).sort((p,q)=>q.w-p.w).slice(0,5), max = (top[0] && top[0].w) || 1;
   $("rkT").textContent = `佔全層 ${Math.round(top.reduce((s,t)=>s+t.w,0)/tot*100)}%`;
   [0,1,2,3,4].forEach(k => {
     const r = $("rr"+k), t = top[k];
@@ -516,13 +555,8 @@ document.addEventListener("keydown", e => {
 $("homeBtn").addEventListener("click", goHome);
 [$("hpause"), $("fpause")].forEach(b => b.addEventListener("click", e => { e.stopPropagation(); setHeld(!held); }));
 
-/* 示範數據跳動 */
+/* 畫面更新（v31：數值來自 API，不再亂數跳動） */
 function tick(){
-  [...LIST, ...LIST1F, ...LIST5F].forEach(a => {
-    a.v = Math.min(119.5, Math.max(115.5, a.v + (Math.random()*2-1)*0.25));
-    if(a.keys) a.keys.forEach(k => { k.w = k.base*(1+(Math.random()*2-1)*0.015); if(k.on) k.kwh += k.w/1000*(1.5/3600); });
-    else { a.w = a.base*(1+(Math.random()*2-1)*0.015); a.kwh += a.w/1000*(1.5/3600); }
-  });
   [...LIST, ...LIST1F, ...LIST5F].forEach(a => { a.hist.push(watt(a)); a.hist.shift(); });
   $("total").textContent = Math.round(L.reduce((s,a)=>s+watt(a),0)).toLocaleString("en-US");
   if(view === "floor"){ updateWin(); updateRank(); } else drawHome();
@@ -530,9 +564,9 @@ function tick(){
 function clock(){ const d = new Date(); $("clock").textContent = `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
 window.addEventListener("resize", () => { if(view === "floor"){ place(); placeDots(); } });
 
-buildHome(); drawHome(); drawSel(); clock(); drawMode(); tick();
+buildHome(); drawHome(); drawSel(); clock(); drawMode(); drawBadge(); tick(); poll();
 idleT = setTimeout(startAuto, IDLE_MS);
-setInterval(tick, 1500); setInterval(clock, 10000);
+setInterval(tick, 1500); setInterval(clock, 10000); setInterval(poll, POLL_MS);
 </script>
 
 </body></html>
