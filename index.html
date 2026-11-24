@@ -112,8 +112,8 @@ html{font-size:min(1vh,calc(100vw / 177.78))}
 .live{display:flex;align-items:center;gap:.8rem;font-size:1.6rem;color:var(--on);margin:-.4rem 0 1rem;letter-spacing:.06em}
 .live i{width:1.2rem;height:1.2rem;border-radius:50%;background:var(--on);box-shadow:0 0 .8rem var(--on);animation:blink 1s steps(2,jump-none) infinite}
 @keyframes blink{50%{opacity:.2}}
-/* v28：能源框與耗電排行放大 1.25 倍（JS 的 WS 要一致） */
-.win{transform-origin:0 0;scale:1.25}.rank{transform-origin:100% 100%;scale:1.25}
+/* v29：能源框放大 1.25 倍、耗電排行 1.4 倍（JS 的 WS 要一致） */
+.win{transform-origin:0 0;scale:1.25}.rank{transform-origin:100% 100%;scale:1.4}
 .live .ts{margin-left:auto;color:var(--muted);font-family:var(--f-num);letter-spacing:0}
 .win .data{gap:.6rem}.win .data b{font-size:2.45rem;letter-spacing:-.02em}
 .rank{position:absolute;right:1.5rem;bottom:1.5rem;width:36rem;z-index:3;background:rgba(36,31,26,.95);border:.2rem solid var(--line);
