@@ -272,7 +272,7 @@ const API = "https://vx1gozd497.execute-api.ap-northeast-1.amazonaws.com/dev";
 const POLL_MS = 5000;
 const DEV = {
   "2F": {9:"P_97F014", 12:"P_977A98", 23:"P_B8A404", 22:"P_AB7504", 11:"P_981CFC", 31:"P_977C94", 14:"P_B8695C", 13:"P_B99AFC", 26:"P_9A2490", 24:"P_B83248", "電":"P_983714"},
-  "1F": {4:"P_AB82A0", 5:"P_9ABDD0", 25:"P_97FF34", 6:"P_AB8200", 7:"P_AB85E8", 1:"P_982F78", 3:"P_9844D4", 2:"P_976F7C"},
+  "1F": {4:"P_AB82A0", 5:"P_9ABDD0", 25:"P_97FF34", 6:"P_AB8200", 7:"P_AB85E8", 1:"P_982F78", 3:"P_9844D4", 2:"P_976F7C", "電":"P_99C5A0"},
   "5F": {20:"P_BAEE48", 19:"P_ACFC94", 18:"P_AA2B98"}
 };
 let apiOK = null;   // null 還沒讀到、true 正常、false 連線中斷
@@ -493,7 +493,7 @@ function setHeld(h){
   drawMode();
 }
 function drawMode(){
-  const txt = auto ? "能源標籤畫面" : held ? "已暫停・可自己點選" : "手動操作・10 秒沒動作就顯示能源標籤畫面";
+  const txt = auto ? "能源標籤畫面" : held ? "已暫停・可自己點選" : "手動操作・10 秒後切換標籤畫面";
   [$("hmode"), $("fmode")].forEach(e => { e.textContent = txt; e.classList.toggle("auto", auto); });
   $("hint").innerHTML = "遙控器：<b>↑ ↓</b> 選樓層　<b>OK</b> 進入";
   $("tv").classList.toggle("held", held);
