@@ -173,7 +173,7 @@ html{font-size:min(1vh,calc(100vw / 177.78))}
 #idle .tag .t{font-weight:600}#idle .tag .v{font-weight:700;font-size:1.05em}
 </style>
 
-<div id="idle" hidden><div class="stg"><img src="left_unit_v21.webp" alt="嵐庭旭 最左一棟"><div class="tag" data-k="solar" style="--dot:#f5b51b;left:22%;top:10%"><div class="t">太陽能</div><div class="v">未連線</div></div><div class="tag" data-k="grid" style="--dot:#3aa0ff;left:12%;top:55%"><div class="t">市電用電</div><div class="v">未連線</div></div><div class="tag" data-k="home" style="--dot:#2fd3c8;left:86%;top:62%"><div class="t">家庭用電</div><div class="v" id="idleHome">連線中…</div></div><div class="tag" data-k="batt" style="--dot:#36c46b;left:82%;top:22%"><div class="t">儲能電池</div><div class="v">未連線</div></div></div></div>
+<div id="idle" hidden><div class="stg"><img src="left_unit_v21.webp" alt="嵐庭旭 最左一棟"><div class="tag" data-k="solar" style="--dot:#f5b51b;left:22%;top:10%"><div class="t">太陽能</div><div class="v" id="idleSolar">未連線</div></div><div class="tag" data-k="grid" style="--dot:#3aa0ff;left:12%;top:55%"><div class="t">市電用電</div><div class="v" id="idleGrid">未連線</div></div><div class="tag" data-k="home" style="--dot:#2fd3c8;left:86%;top:62%"><div class="t">家庭用電</div><div class="v" id="idleHome">連線中…</div></div><div class="tag" data-k="batt" style="--dot:#36c46b;left:82%;top:22%"><div class="t">儲能電池</div><div class="v" id="idleBatt">未連線</div></div></div></div>
 <div class="view home" id="homeView">
   <header>
     <h1>嵐庭旭 數位孿生・全棟能源總覽</h1>
@@ -436,7 +436,7 @@ function show(i){ cur = (i + L.length) % L.length; $("step").innerHTML = `<b>${c
 
 /* ---------- 首頁 ---------- */
 const floorW = f => f.built ? f.devices.reduce((s,a)=>s+watt(a),0) : 0;
-const floorK = f => f.built ? f.devices.reduce((s,a)=>s+kwh(a),0) : 0;
+const floorK = f => f.built ? f.devices.reduce((s,a)=>s+(a.today||0),0) : 0;   // v40：今日度數（/Energy/getStatus 的 plugConsumptionList）
 function buildHome(){
   const st = $("stack"), cards = $("cards");
   // 由下往上畫；已建置樓層畫在佔位樓板上面，避免被線條蓋住
@@ -473,8 +473,9 @@ function fcard(f){
 }
 function drawHome(){
   FLOORS.forEach((f,i) => $("fc"+i).innerHTML = fcard(f));
-  $("bW").textContent = Math.round(FLOORS.reduce((s,f)=>s+floorW(f),0)).toLocaleString("en-US");
-  $("bK").textContent = f2(FLOORS.reduce((s,f)=>s+floorK(f),0));
+  // v40：全棟＝逆變器整棟數據（/Energy/getStatus）；讀不到時退回各層插座加總
+  $("bW").textContent = Math.round(EN ? EN.home*1000 : FLOORS.reduce((s,f)=>s+floorW(f),0)).toLocaleString("en-US");
+  $("bK").textContent = EN ? f2(EN.todayKwh) : "—";
 }
 function drawSel(){
   FLOORS.forEach((f,i) => {
@@ -556,7 +557,39 @@ document.querySelectorAll("#idle .tag").forEach(el => {
     el.addEventListener("pointermove", mv); el.addEventListener("pointerup", up);
   });
 });
+/* v40 首頁整棟能源（參照 yamaPad：YamaHomeApi /Energy/getStatus，不用金鑰）。
+   adminID/homeID 不寫在原始碼：電視網址後面加 #a=adminID&h=homeID，第一次開啟記在這台瀏覽器。 */
+const EAPI = "https://hje5p8e573.execute-api.ap-northeast-1.amazonaws.com/dev";
+const IDKEY = "lanting-home-ids";
+let IDS = null;
+(() => {
+  const q = new URLSearchParams(location.hash.slice(1));
+  if(q.get("a") && q.get("h")){ IDS = {a:q.get("a"), h:q.get("h")}; try { localStorage.setItem(IDKEY, JSON.stringify(IDS)); } catch(e) {} }
+  else { try { IDS = JSON.parse(localStorage.getItem(IDKEY)); } catch(e) {} }
+})();
+let EN = null;   // {pv, grid, bat, soc, home, todayKwh}（kW／度）
+async function pollEnergy(){
+  if(!IDS) return;
+  const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  try{
+    const r = await fetch(`${EAPI}/Energy/getStatus?adminID=${encodeURIComponent(IDS.a)}&homeID=${encodeURIComponent(IDS.h)}&date=${day}`, {cache:"no-store"});
+    const j = await r.json(), x = j && j.data, fi = x && x.flowInfo; if(!fi) throw 0;
+    EN = { pv:+fi.PVPower||0, grid:+fi.GridPower||0, bat:+fi.BatteryChargePower||0, soc:+fi.battery||0, home:+fi.home||0,
+           todayKwh: +(x.day && x.day.todayConsumption) || 0 };
+    const by = {}; ((x.day && x.day.plugConsumptionList) || []).forEach(p => by[p.deviceID] = +p.consumptionKwh || 0);
+    [...LIST, ...LIST1F, ...LIST5F].forEach(a => a.today = a.dev ? (by[a.dev] || 0) : 0);
+  }catch(e){ /* 保留上一次數值 */ }
+  drawIdle(); if(view === "home") drawHome();
+}
 function drawIdle(){
+  if(EN){
+    $("idleSolar").textContent = EN.pv.toFixed(2) + " kW";
+    // 正負號：市電 負＝用電、正＝賣電；電池 負＝放電、正＝充電
+    $("idleGrid").textContent = Math.abs(EN.grid) < 0.005 ? "0.00 kW" : (EN.grid < 0 ? "用電 " : "賣電 ") + Math.abs(EN.grid).toFixed(2) + " kW";
+    $("idleBatt").textContent = (Math.abs(EN.bat) < 0.005 ? "待機 0.00 kW" : (EN.bat < 0 ? "放電 " : "充電 ") + Math.abs(EN.bat).toFixed(2) + " kW") + " · " + Math.round(EN.soc) + "%";
+    $("idleHome").textContent = EN.home.toFixed(2) + " kW";
+    return;
+  }
   if(apiOK === null) return;
   const w = [...LIST, ...LIST1F, ...LIST5F].filter(a => a.dev).reduce((s,a)=>s+watt(a),0);
   $("idleHome").textContent = (w/1000).toFixed(2) + " kW";
@@ -594,6 +627,7 @@ window.addEventListener("resize", () => { if(view === "floor"){ place(); placeDo
 buildHome(); drawHome(); drawSel(); clock(); drawMode(); drawBadge(); tick(); poll();
 idleT = setTimeout(startAuto, IDLE_MS);
 setInterval(tick, 1500); setInterval(clock, 10000); setInterval(poll, POLL_MS);
+pollEnergy(); setInterval(pollEnergy, 10000);
 </script>
 
 </body></html>
