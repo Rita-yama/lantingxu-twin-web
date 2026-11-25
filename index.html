@@ -164,8 +164,16 @@ html{font-size:min(1vh,calc(100vw / 177.78))}
 .pausebtn.on{background:var(--warn);border-color:var(--warn);color:#1b1713}
 
 .tv header{min-width:0}.tv h1{min-width:0;overflow:hidden;text-overflow:ellipsis}
+/* v38 待機畫面：10 秒沒動作顯示〈標籤檢視 v7〉 */
+#idle{position:fixed;inset:0;z-index:999;background:#e9e8ec;display:flex;align-items:center;justify-content:center;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif}
+#idle .stg{position:relative;width:min(100vw,calc(100vh*1168/880))}
+#idle .stg img{pointer-events:none;display:block;width:100%;height:auto;max-width:none}
+#idle .tag{cursor:grab;touch-action:none;user-select:none;position:absolute;transform:translate(-50%,-50%);background:rgba(24,24,28,.86);color:#fff;border-radius:14px;padding:.6em 1em .6em 2.1em;box-shadow:0 6px 18px rgba(0,0,0,.25);white-space:nowrap;font-size:clamp(11px,1.6vw,20px);line-height:1.3}
+#idle .tag::before{content:"";position:absolute;left:.85em;top:50%;width:.6em;height:.6em;margin-top:-.3em;border-radius:50%;background:var(--dot);box-shadow:0 0 8px var(--dot)}
+#idle .tag .t{font-weight:600}#idle .tag .v{font-weight:700;font-size:1.05em}
 </style>
 
+<div id="idle" hidden><div class="stg"><img src="left_unit_v21.webp" alt="嵐庭旭 最左一棟"><div class="tag" data-k="solar" style="--dot:#f5b51b;left:22%;top:10%"><div class="t">太陽能</div><div class="v">未連線</div></div><div class="tag" data-k="grid" style="--dot:#3aa0ff;left:12%;top:55%"><div class="t">市電用電</div><div class="v">未連線</div></div><div class="tag" data-k="home" style="--dot:#2fd3c8;left:86%;top:62%"><div class="t">家庭用電</div><div class="v" id="idleHome">連線中…</div></div><div class="tag" data-k="batt" style="--dot:#36c46b;left:82%;top:22%"><div class="t">儲能電池</div><div class="v">未連線</div></div></div></div>
 <div class="view home" id="homeView">
   <header>
     <h1>嵐庭旭 數位孿生・全棟能源總覽</h1>
@@ -233,7 +241,6 @@ const LIST1F = [
  {no:4,  name:"前段天花板",     loc:"一樓・入口前段天花板",       plug:"名稱待補",                    x:37.20,y:81.12,w:30,  kwh:0.15,v:117.70},
  {no:1,  name:"插座 1",         loc:"一樓・右側智慧家電展區下方", plug:"名稱待補",                    x:64.73,y:63.83,w:12,  kwh:0.06,v:117.82},
  {no:3,  name:"插座 3",         loc:"一樓・左牆 GOODWE 旁",      plug:"名稱待補",                    x:34.97,y:58.51,w:8,   kwh:0.04,v:117.76},
- {no:21, name:"左側走道燈",     loc:"一樓・左側走道",             plug:"一樓左側走道燈",              x:31.25,y:43.88,w:24,  kwh:0.12,v:117.64},
  {no:2,  name:"語音控制器",     loc:"一樓・灰牆門旁",             plug:"語音控制器",       lab:"控制", x:51.34,y:38.56,w:2,   kwh:0.01,v:117.58},
  {no:5,  name:"內側天花板燈",   loc:"一樓・內側天花板",           plug:"天花板燈內側開關",            x:53.57,y:50.53,w:36,  kwh:0.18,v:117.66},
  {no:25, name:"免治馬桶",       loc:"一樓廁所",                   plug:"廁所免治馬桶",                x:69.20,y:47.87,w:45,  kwh:0.27,v:117.62},
@@ -485,11 +492,11 @@ function setHeld(h){
   drawMode();
 }
 function drawMode(){
-  const txt = auto ? "自動輪播中" : held ? "已暫停・可自己點選" : "手動操作・10 秒沒動作就自動輪播";
+  const txt = auto ? "能源標籤畫面" : held ? "已暫停・可自己點選" : "手動操作・10 秒沒動作就顯示能源標籤畫面";
   [$("hmode"), $("fmode")].forEach(e => { e.textContent = txt; e.classList.toggle("auto", auto); });
   $("hint").innerHTML = "遙控器：<b>↑ ↓</b> 選樓層　<b>OK</b> 進入";
   $("tv").classList.toggle("held", held);
-  [$("hpause"), $("fpause")].forEach(b => { b.textContent = held ? "▶ 繼續自動輪播" : "⏸ 暫停自動輪播"; b.classList.toggle("on", held); });
+  [$("hpause"), $("fpause")].forEach(b => { b.textContent = held ? "▶ 繼續自動切換" : "⏸ 暫停自動切換"; b.classList.toggle("on", held); });
 }
 
 /* ---------- 切換畫面 ---------- */
@@ -523,19 +530,41 @@ function autoDevice(){
 }
 function startAuto(){
   if(held) return;
-  auto = true; drawMode();
-  if(view === "floor"){ autoFloor = FL; autoT = setTimeout(autoDevice, STEP_MS); }
-  else autoHome();
+  auto = true; drawMode(); $("idle").hidden = false;  // v38：改成停在能源標籤畫面，不再輪播
 }
 function userActive(){
   clearTimeout(autoT); clearTimeout(idleT); $("go").textContent = "";
-  auto = false; drawMode();
+  auto = false; drawMode(); $("idle").hidden = true;
   if(!held) idleT = setTimeout(startAuto, IDLE_MS);
 }
-["pointerdown","wheel","touchstart"].forEach(ev => document.addEventListener(ev, userActive, {capture:true, passive:true}));
+["pointerdown","wheel","touchstart"].forEach(ev => document.addEventListener(ev, e => {
+  if(!$("idle").hidden && e.target.closest && e.target.closest("#idle .tag")){ clearTimeout(idleT); return; }  // 拖曳標籤不離開待機畫面
+  userActive();
+}, {capture:true, passive:true}));
+
+/* v38 待機畫面標籤：可拖曳、位置記在這台瀏覽器；家庭用電＝已連線插座功率加總（真實數據） */
+const TAGKEY = "lanting-idle-tags-v38";
+let tagPos = {}; try { tagPos = JSON.parse(localStorage.getItem(TAGKEY)) || {}; } catch(e) {}
+document.querySelectorAll("#idle .tag").forEach(el => {
+  const p = tagPos[el.dataset.k]; if(p){ el.style.left = p.x + "%"; el.style.top = p.y + "%"; }
+  el.addEventListener("pointerdown", e => {
+    el.setPointerCapture(e.pointerId); const r = el.parentNode.getBoundingClientRect();
+    const mv = ev => { const x = Math.min(100,Math.max(0,(ev.clientX-r.left)/r.width*100)), y = Math.min(100,Math.max(0,(ev.clientY-r.top)/r.height*100));
+      el.style.left = x + "%"; el.style.top = y + "%"; tagPos[el.dataset.k] = {x, y}; };
+    const up = () => { el.removeEventListener("pointermove", mv); el.removeEventListener("pointerup", up);
+      try { localStorage.setItem(TAGKEY, JSON.stringify(tagPos)); } catch(e) {} };
+    el.addEventListener("pointermove", mv); el.addEventListener("pointerup", up);
+  });
+});
+function drawIdle(){
+  if(apiOK === null) return;
+  const w = [...LIST, ...LIST1F, ...LIST5F].filter(a => a.dev).reduce((s,a)=>s+watt(a),0);
+  $("idleHome").textContent = (w/1000).toFixed(2) + " kW";
+}
 
 /* 遙控器／鍵盤：首頁 ↑↓ 選樓層、OK 進入；樓層頁 ←→ 換設備、OK/空白暫停、返回鍵回首頁 */
 document.addEventListener("keydown", e => {
+  if(!$("idle").hidden){ e.preventDefault(); userActive(); return; }  // 待機畫面：任一鍵只回原畫面
   if(view === "home"){
     if(e.key === "ArrowUp" || e.key === "ArrowDown"){
       const k = MENU.indexOf(sel), d = e.key === "ArrowUp" ? -1 : 1;
@@ -557,6 +586,7 @@ function tick(){
   [...LIST, ...LIST1F, ...LIST5F].forEach(a => { a.hist.push(watt(a)); a.hist.shift(); });
   $("total").textContent = Math.round(L.reduce((s,a)=>s+watt(a),0)).toLocaleString("en-US");
   if(view === "floor"){ updateWin(); updateRank(); } else drawHome();
+  drawIdle();
 }
 function clock(){ const d = new Date(); $("clock").textContent = `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`; }
 window.addEventListener("resize", () => { if(view === "floor"){ place(); placeDots(); } });
